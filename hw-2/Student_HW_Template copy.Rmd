@@ -1,0 +1,17 @@
+---
+title: "HW Template for 386"
+author: "your_name"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
+```
+
+### Exercise 1
+
+text and code here
+
+### Exercise 2
+
+text and code here
