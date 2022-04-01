@@ -1,0 +1,65 @@
+---
+title: "Homework 1"
+author: "Marion Geary"
+output:
+  html_document:
+    df_print: paged
+    highlight: default
+  pdf_document: 
+     highlight: default 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
+```
+
+```{r}
+library(tidyverse)
+library(openintro)
+```
+## Loading the Data
+
+```{r}
+data("seattlepets")
+```
+
+## Exercises
+
+1. There are 52,519 pets in the dataset.
+2. We have 7 variables for each pet.
+3. The top three most common pet names (omitting the `NA` data) in Seattle are Lucy, Charlie, and Luna.
+4. Recreated plots:
+
+```{r}
+# Graph 1
+data("mpg")
+ggplot(mpg, mapping = aes(x = displ)) + 
+  geom_histogram(mapping = aes(fill = drv)) + 
+  facet_wrap(~drv, nrow = 3) + 
+  labs(title = "Graph 1", y = "Frequency",
+       x = "Displacement", fill = "Drive Train", 
+       caption = "This is a caption.")
+
+# Graph 2
+data("economics")
+ggplot(economics, mapping = aes(x = date, y = unemploy)) +
+  geom_line(color = "violetred") + 
+  labs(title = "Graph 2", x = "Date", 
+       y = "No. of Unemployed (thousands)", 
+       caption = "The color used is violetred.")
+
+# Graph 3
+data("diamonds")
+ggplot(diamonds, aes(x = depth)) + 
+  geom_density(mapping = aes(color = cut, fill = cut),
+               alpha = 0.2) + 
+  labs(x = "Diamond Depth", y = "Density", 
+       caption = "Both the fill and the color are grouped by the variable `cut`. The transparency is set to 0.2.", 
+       title = "Graph 3")
+
+```
+
+
+
+
+

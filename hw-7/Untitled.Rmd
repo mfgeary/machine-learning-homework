@@ -1,0 +1,109 @@
+---
+title: "HW_7_Geary_Veth"
+author: "Chloe Veth and Marion Geary"
+date: "2/24/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
+```
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(mlbench)
+data("Ozone")
+```
+
+## Exercise 1
+
+```{r}
+ozone <- Ozone %>% rename("month" = V1, "day_of_month" = V2, "day_of_week" = V3, "reading" = V4, "pressure_height" = V5, "wind_speed" = V6, "humidity%" = V7, "sandburg_temp" = V8, "el_monte_temp" = V9, "inversion_height" = V10, "pressure_gradient" = V11, "inversion_temp" = V12, "visibility" = V13)
+ozone <- ozone %>% mutate(month = as.numeric(month), day_of_month = as.numeric(day_of_month), day_of_week = as.numeric(day_of_week))
+```
+
+## Exercise 2
+
+```{r}
+summary(ozone)
+ozone <- ozone %>% filter(!is.na(reading))
+```
+
+We might want to remove the missing values in the outcome so we can do supervised machine learning, where we need the outcomes. Without the outcome, we will not be able to assess how well our model is performing with missing values because there is not point of comparison for the prediction with the real value.
+
+There are many variables with missing values including `pressure_height`, `humidity%`, `sandburg_temp`, `el_monte_temp`, `inversion_temp`, `inversion_height`, `pressure_gradient`.
+
+## Exercise 3
+
+```{r}
+ozone_longer <- ozone %>% pivot_longer(!reading, names_to="predictor", values_to="value")
+
+ggplot(ozone_longer, aes(x = value, y = reading)) +
+  geom_point() +
+  geom_smooth(method = "loess") +
+  facet_wrap(~predictor, scales="free") + labs(x = "Value", y = "Daily Max One-Hour Average Ozone Reading", title = "Predictors vs. Max Ozone Reading")
+```
+
+## Exercise 4
+
+write paragraph :(
+
+## Exercise 5
+
+```{r}
+set.seed(13)
+ozone_split <- initial_split(ozone, prop = .8)
+ozone_train <- training(ozone_split)
+ozone_test <- testing(ozone_split)
+
+ozone_recipe <- recipe(reading ~ ., data = ozone) %>%
+  step_normalize(all_numeric_predictors()) %>%
+  step_impute_knn(all_predictors(), neighbors = 5)
+
+skimr::skim(bake(prep(ozone_recipe), new_data = ozone_train))
+```
+
+## Exercise 6
+
+```{r}
+ozone_recipe <- ozone_recipe %>%
+  step_corr(all_numeric_predictors())
+
+skimr::skim(bake(prep(ozone_recipe), new_data = ozone_train))
+```
+
+epadsfadsjfl
+
+## Exercise 7
+
+```{r}
+ozone_folds <- vfold_cv(ozone_train, v = 10, repeats = 5)
+
+ozone_model <- linear_reg() %>% set_engine('lm')
+
+ozone_wkflow <- workflow() %>%
+  add_model(ozone_model) %>%
+  add_recipe(ozone_recipe) 
+
+my_metrics <- metric_set(rmse, rsq)
+
+ozone_pred <- control_resamples(save_pred = TRUE)
+
+ozone_res <- ozone_wkflow %>% fit_resamples(resamples = ozone_folds, control = ozone_pred, metrics = my_metrics)
+
+collect_metrics(ozone_res)
+```
+
+ajdfjldsajf
+
+## Exercise 7
+
+```{r}
+ozone_fit <- fit(ozone_wkflow, data = ozone_train)
+ozone_res_real <- augment(ozone_fit, new_data = ozone_test)
+
+ggplot(ozone_res_real, aes(y = reading - .pred)) + geom_histogram()
+```
+
+jkjalfjalf

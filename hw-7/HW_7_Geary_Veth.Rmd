@@ -1,0 +1,148 @@
+---
+title: "HW_7_Geary_Veth"
+author: "Chloe Veth and Marion Geary"
+date: "2/24/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F, verbose = T)
+```
+
+```{r}
+library(mlbench)
+library(readxl)
+library(janitor)
+library(neuralnet)
+library(scales)
+library(tidymodels)
+tidymodels_prefer()
+data("Ozone")
+```
+
+## Exercise 1
+
+```{r}
+ozone <- Ozone %>% rename("month" = V1, "day_of_month" = V2, "day_of_week" = V3, "reading" = V4, "pressure_height" = V5, "wind_speed" = V6, "humidity%" = V7, "sandburg_temp" = V8, "el_monte_temp" = V9, "inversion_height" = V10, "pressure_gradient" = V11, "inversion_temp" = V12, "visibility" = V13)
+ozone <- ozone %>% mutate(month = as.numeric(month), day_of_month = as.numeric(day_of_month), day_of_week = as.numeric(day_of_week))
+```
+
+## Exercise 2
+
+```{r}
+summary(ozone)
+ozone <- ozone %>% filter(!is.na(reading))
+```
+
+We might want to remove the missing values in the outcome so we can do supervised machine learning, where we need the outcomes. Without the outcome, we will not be able to assess how well our model is performing with missing values because there is not point of comparison for the prediction with the real value.
+
+There are many variables with missing values including `pressure_height`, `humidity%`, `sandburg_temp`, `el_monte_temp`, `inversion_temp`, `inversion_height`, `pressure_gradient`.
+
+## Exercise 3
+
+```{r}
+ozone_longer <- ozone %>% pivot_longer(!reading, names_to="predictor", values_to="value")
+
+ggplot(ozone_longer, aes(x = value, y = reading)) +
+  geom_point() +
+  geom_smooth(method = "loess") +
+  facet_wrap(~predictor, scales="free") + labs(x = "Value", y = "Daily Max One-Hour Average Ozone Reading", title = "Predictors vs. Max Ozone Reading")
+```
+
+## Exercise 4
+
+In the graphs, we see that many of the predictors appear to have an impact on `reading`. Many of the predictors do not have a linear relationship with `reading`. For example, `month`, `pressure_gradient`, `wind_speed`, and `inversion_height` have similar normal shapes, showing that values near the mean result in the highest predicted `reading`.
+
+## Exercise 5
+
+```{r}
+set.seed(13)
+ozone_split <- initial_split(ozone, prop = .8)
+ozone_train <- training(ozone_split)
+ozone_test <- testing(ozone_split)
+
+ozone_recipe <- recipe(reading ~ ., data = ozone) %>%
+  step_normalize(all_numeric_predictors()) %>%
+  step_impute_knn(all_predictors(), neighbors = 5)
+
+skimr::skim(bake(prep(ozone_recipe), new_data = ozone_train))
+```
+
+In the knn imputation step, the recipe is using a knn model with `neighbors = 5` to impute the missing data. This means that it is using the knn model to estimate the missing values and fill them in to the dataframe.
+
+## Exercise 6
+
+```{r}
+ozone_recipe <- ozone_recipe %>%
+  step_corr(all_numeric_predictors())
+
+skimr::skim(bake(prep(ozone_recipe), new_data = ozone_train))
+```
+
+The variables `el_monte_temp` and `inversion` were removed for being highly correlated to `pressure_gradient`.
+
+## Exercise 7
+
+```{r}
+ozone_folds <- vfold_cv(ozone_train, v = 10, repeats = 5)
+
+ozone_model <- linear_reg() %>% set_engine('lm')
+
+ozone_wkflow <- workflow() %>%
+  add_model(ozone_model) %>%
+  add_recipe(ozone_recipe) 
+
+my_metrics <- metric_set(rmse, rsq)
+
+ozone_pred <- control_resamples(save_pred = TRUE)
+
+ozone_res <- ozone_wkflow %>% fit_resamples(resamples = ozone_folds, control = ozone_pred, metrics = my_metrics)
+
+collect_metrics(ozone_res)
+```
+
+The `rsq` value of 0.680 is decent. It indicates that 0.680 of the variation in `reading` is explained through the model. The value of `rmse` is 4.66, which is not super small. It shows that the squared error is around 5, which is pretty high for data that ranges from 1 to 38.
+
+## Exercise 8
+
+```{r}
+ozone_fit <- fit(ozone_wkflow, data = ozone_train)
+ozone_res_real <- augment(ozone_fit, new_data = ozone_test)
+
+ggplot(ozone_res_real, aes(y = reading - .pred, x = .pred)) + geom_point() + labs(y = "Residual", x = "Predicted Values", title = "Predicted Values vs. Residuals") + geom_line(y = 0)
+```
+
+I notice that more of the residuals are negative than positive. The models tends to overpredict the data.
+
+# Exercise 9
+
+```{r}
+elastic_net_mod <- linear_reg(penalty = tune(), mixture = tune()) %>%  
+    set_engine("glmnet")
+
+elastic_net_wkflow <- workflow() %>% 
+    add_recipe(ozone_recipe) %>% 
+    add_model(elastic_net_mod)
+
+penalty_grid <- expand_grid(grid_regular(penalty(), levels = 20), mixture = seq(from = 0, to = 1, by = 0.1))
+
+elastic_net_res <- elastic_net_wkflow %>% tune_grid(resamples = ozone_folds, grid = penalty_grid)
+elastic_metrics <- collect_metrics(elastic_net_res)
+elastic_net_res %>% show_best(metric = "rmse")
+```
+
+# Exercise 10
+
+The best `mixture` is 0.6 which shows that a pretty even split between lasso and ridge regression is the best for this data, with the L1 being weighted slightly more, showing a bit more influence from the lasso regression. The `penalty` shows that the summed value of the two penalty parameters is 0.298. 
+
+# Exercise 11
+
+```{r}
+final_workflow <- elastic_net_wkflow %>% finalize_workflow(select_best(elastic_net_res, metric = "rmse"))
+
+final_fit <- final_workflow %>% fit_resamples(resamples = ozone_folds, control = ozone_pred, metrics = my_metrics)
+
+collect_metrics(final_fit)
+```
+
+The new data `rsq` is 0.687, which shows a higher correlation than in Exercise 7. The `rmse` is slightly lower at 4.61 as opposed to 4.67 in Exercise 7. Both these metrics are slightly better than in Exercise 7, showing that the use of the tuned elastic-net regression is an improvement over the original model.
